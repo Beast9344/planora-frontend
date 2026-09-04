@@ -4,11 +4,8 @@ import { UserRole } from '@/lib/authUtils';
 import { jwtUtils } from '@/lib/jwtUtils';
 import { cookies } from 'next/headers';
 
-const BASE_API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!BASE_API_URL) {
-  throw new Error('NEXT_PUBLIC_API_BASE_URL is not defined');
-}
+const BASE_API_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1';
 
 export async function getNewTokensWithRefreshToken(
   refreshToken: string,
