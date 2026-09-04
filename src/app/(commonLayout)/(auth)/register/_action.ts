@@ -36,9 +36,9 @@ export const registerAction = async (
     const { accessToken, refreshToken, token, user } = response.data;
     const { role, emailVerified } = user;
 
-    await setTokenInCookies('accessToken', accessToken);
-    await setTokenInCookies('refreshToken', refreshToken);
-    await setTokenInCookies('better-auth.session_token', token, 24 * 60 * 60);
+    if (accessToken) await setTokenInCookies('accessToken', accessToken);
+    if (refreshToken) await setTokenInCookies('refreshToken', refreshToken);
+    if (token) await setTokenInCookies('better-auth.session_token', token, 24 * 60 * 60);
 
     if (!emailVerified) {
       redirect(`/verify-email?email=${encodeURIComponent(user.email)}`);
@@ -60,6 +60,8 @@ export const registerAction = async (
     ) {
       throw error;
     }
+
+    console.error('Registration server action failed:', error?.response?.data || error?.message || error);
 
     return {
       success: false,
