@@ -2,7 +2,8 @@ import { ApiResponse } from '@/types/api.types';
 import axios from 'axios';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://planora-backend-4bez.vercel.app/api/v1';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

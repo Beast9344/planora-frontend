@@ -8,7 +8,8 @@ import { ApiResponse } from '@/types/api.types';
 import { isTokenExpiringSoon } from '../tokenUtils';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://planora-backend-4bez.vercel.app/api/v1';
 
 async function tryRefreshToken(
   accessToken: string,

@@ -5,7 +5,8 @@ import { jwtUtils } from '@/lib/jwtUtils';
 import { cookies } from 'next/headers';
 
 const BASE_API_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://planora-backend-4bez.vercel.app/api/v1';
 
 export async function getNewTokensWithRefreshToken(
   refreshToken: string,
