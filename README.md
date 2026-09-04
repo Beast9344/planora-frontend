@@ -1,4 +1,4 @@
-﻿# Planora — Frontend
+# Planora — Frontend
 
 A full-stack event management platform built with Next.js, enabling users to
 discover, create, and participate in public and private events with integrated
