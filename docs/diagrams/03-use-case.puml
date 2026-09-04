@@ -1,0 +1,260 @@
+@startuml Planora-Use-Case
+' =============================================================
+'  PLANORA - USE CASE DIAGRAM
+'  Every use case below maps to a real /api/v1 endpoint.
+' =============================================================
+!theme plain
+left to right direction
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam packageStyle rectangle
+
+skinparam usecase {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam actor {
+  BackgroundColor #E7EDF9
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam note {
+  BackgroundColor #EEF3FB
+  BorderColor #7D96C4
+}
+
+title <size:18><b>Planora — Use Case Diagram</b></size>\n<size:11>Role inheritance: Super Admin > Admin > Registered User > Guest</size>
+
+' -----------------------------------------------------------------
+'  ACTORS
+' -----------------------------------------------------------------
+actor "Guest" as Guest
+actor "Registered User" as User
+actor "Event Host" as Host
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+
+actor "SSLCommerz\ngateway" as Gateway <<external>>
+actor "Google\nOAuth" as Google <<external>>
+actor "SMTP\nmail service" as Mail <<external>>
+actor "OpenRouter\nLLM" as LLM <<external>>
+
+' Generalisation: each role inherits everything below it
+Guest      <|-- User
+User       <|-- Host
+User       <|-- Admin
+Admin      <|-- SuperAdmin
+
+rectangle "Planora Event Management Platform" as System {
+
+  ' -------------------------------------------------------------
+  package "Discovery  ·  no login required" as UcDiscover {
+    usecase "Browse public events" as UC01
+    usecase "View event details\nand reviews" as UC02
+    usecase "Search events with\nautocomplete suggestions" as UC03
+    usecase "Ask the Planora\nassistant" as UC04
+    usecase "Read static pages\n(about, contact, privacy)" as UC05
+  }
+
+  ' -------------------------------------------------------------
+  package "Account & Access" as UcAccount {
+    usecase "Register with\nemail and password" as UC10
+    usecase "Verify email\nwith 6-digit OTP" as UC11
+    usecase "Resend\nverification OTP" as UC12
+    usecase "Log in with\ncredentials" as UC13
+    usecase "Sign in with Google" as UC14
+    usecase "Refresh access token" as UC15
+    usecase "Request password reset" as UC16
+    usecase "Reset password\nwith OTP" as UC17
+    usecase "Change password" as UC18
+    usecase "Log out" as UC19
+    usecase "View and edit profile" as UC20
+    usecase "Upload avatar" as UC21
+    usecase "Delete own account" as UC22
+  }
+
+  ' -------------------------------------------------------------
+  package "Participation" as UcPart {
+    usecase "Request to join\nan event" as UC30
+    usecase "Pay registration fee" as UC31
+    usecase "View my join requests\nand their status" as UC32
+    usecase "View my joined events" as UC33
+    usecase "Respond to an\ninvitation" as UC34
+    usecase "Accept invitation" as UC35
+    usecase "Reject invitation" as UC36
+    usecase "View my payment\nhistory" as UC37
+    usecase "Get personalised\nevent recommendations" as UC38
+  }
+
+  ' -------------------------------------------------------------
+  package "Reviews" as UcRev {
+    usecase "Write a review\nafter the event" as UC40
+    usecase "Edit my review" as UC41
+    usecase "Delete my review" as UC42
+  }
+
+  ' -------------------------------------------------------------
+  package "Hosting" as UcHost {
+    usecase "Create an event" as UC50
+    usecase "Upload event image" as UC51
+    usecase "Edit my event" as UC52
+    usecase "Change event status\n(active/completed/cancelled)" as UC53
+    usecase "Delete my event" as UC54
+    usecase "Invite a specific user" as UC55
+    usecase "Search users to invite" as UC56
+    usecase "Review pending\njoin requests" as UC57
+    usecase "Approve participant" as UC58
+    usecase "Reject participant" as UC59
+    usecase "Ban participant" as UC60
+    usecase "View participant roster" as UC61
+    usecase "See my hosting\ndashboard summary" as UC62
+  }
+
+  ' -------------------------------------------------------------
+  package "Administration" as UcAdmin {
+    usecase "View platform statistics" as UC70
+    usecase "View reports summary" as UC71
+    usecase "List and search\nall users" as UC72
+    usecase "Inspect a user" as UC73
+    usecase "Block a user" as UC74
+    usecase "Unblock a user" as UC75
+    usecase "Soft-delete a user" as UC76
+    usecase "List all events" as UC77
+    usecase "Soft-delete any event" as UC78
+    usecase "View all payment\ntransactions" as UC79
+    usecase "Promote user to Admin" as UC80
+    usecase "Demote Admin to user" as UC81
+  }
+}
+
+' -----------------------------------------------------------------
+'  GUEST
+' -----------------------------------------------------------------
+Guest --> UC01
+Guest --> UC02
+Guest --> UC03
+Guest --> UC04
+Guest --> UC05
+Guest --> UC10
+Guest --> UC13
+Guest --> UC14
+Guest --> UC16
+
+' -----------------------------------------------------------------
+'  REGISTERED USER
+' -----------------------------------------------------------------
+User --> UC11
+User --> UC18
+User --> UC19
+User --> UC20
+User --> UC22
+User --> UC30
+User --> UC32
+User --> UC33
+User --> UC34
+User --> UC37
+User --> UC38
+User --> UC40
+User --> UC41
+User --> UC42
+
+' -----------------------------------------------------------------
+'  HOST  (any user who owns an event)
+' -----------------------------------------------------------------
+Host --> UC50
+Host --> UC52
+Host --> UC53
+Host --> UC54
+Host --> UC55
+Host --> UC57
+Host --> UC61
+Host --> UC62
+
+' -----------------------------------------------------------------
+'  ADMIN
+' -----------------------------------------------------------------
+Admin --> UC70
+Admin --> UC71
+Admin --> UC72
+Admin --> UC73
+Admin --> UC74
+Admin --> UC75
+Admin --> UC76
+Admin --> UC77
+Admin --> UC78
+Admin --> UC79
+Admin --> UC80
+
+' -----------------------------------------------------------------
+'  SUPER ADMIN  (only role allowed to demote an Admin)
+' -----------------------------------------------------------------
+SuperAdmin --> UC81
+
+' -----------------------------------------------------------------
+'  EXTERNAL ACTORS
+' -----------------------------------------------------------------
+UC31 --> Gateway
+UC79 --> Gateway
+UC14 --> Google
+UC11 --> Mail
+UC12 --> Mail
+UC16 --> Mail
+UC17 --> Mail
+UC04 --> LLM
+
+' -----------------------------------------------------------------
+'  INCLUDE / EXTEND
+' -----------------------------------------------------------------
+UC10 ..> UC11 : <<include>>
+UC11 ..> UC12 : <<extend>>
+UC13 ..> UC15 : <<include>>
+UC16 ..> UC17 : <<include>>
+UC20 ..> UC21 : <<extend>>
+UC30 ..> UC31 : <<extend>>\n<i>only when feeType = PAID</i>
+UC34 <.. UC35 : <<extend>>
+UC34 <.. UC36 : <<extend>>
+UC35 ..> UC30 : <<include>>\n<i>creates a PENDING participant</i>
+UC50 ..> UC51 : <<extend>>
+UC55 ..> UC56 : <<include>>
+UC57 <.. UC58 : <<extend>>
+UC57 <.. UC59 : <<extend>>
+UC57 <.. UC60 : <<extend>>
+UC40 ..> UC33 : <<include>>\n<i>requires JOINED / APPROVED</i>
+
+' -----------------------------------------------------------------
+'  BUSINESS RULES
+' -----------------------------------------------------------------
+note right of UC58
+  <b>Approval guard</b>
+  Refused while the event is PAID and the
+  participant's paymentStatus is not PAID.
+  On success status becomes JOINED, not APPROVED.
+end note
+
+note right of UC40
+  <b>Review window</b>
+  Allowed only when the event status is COMPLETED
+  and the caller's participation is JOINED or
+  APPROVED. One review per user per event, editable
+  for 7 days from eventDateTime.
+end note
+
+note right of UC04
+  Public and unauthenticated. Grounded strictly on
+  upcoming PUBLIC event rows; the model is instructed
+  never to invent events, prices, dates or venues.
+  Protected only by a 20 req/min per-IP limiter.
+end note
+
+note right of UC80
+  An Admin may only promote USER -> ADMIN.
+  SUPER_ADMIN can never be granted through the API,
+  and SUPER_ADMIN accounts cannot be edited,
+  blocked, or deleted by anyone.
+end note
+
+@enduml

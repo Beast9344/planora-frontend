@@ -1,0 +1,376 @@
+@startuml Planora-ER-Data-Model
+' =============================================================
+'  PLANORA - ENTITY RELATIONSHIP / DATA MODEL
+'  Source of truth: planora-backend/prisma/schema/*.prisma
+'    schema.prisma  -> generator + postgresql datasource
+'    auth.prisma    -> User, Session, Account, Verification
+'    event.prisma   -> Event, EventParticipant, EventInvitation, EventReview
+'    payment.prisma -> PaymentTransaction
+'    enums.prisma   -> all 10 enums
+' =============================================================
+!theme plain
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam padding 3
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam ArrowThickness 1.2
+
+skinparam entity {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  BorderThickness 1.4
+  FontColor #16233B
+  FontStyle bold
+}
+skinparam class {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+  FontColor #4A3106
+}
+skinparam note {
+  BackgroundColor #EEF3FB
+  BorderColor #7D96C4
+  FontColor #16233B
+}
+
+title <size:18><b>Planora — Entity Relationship Model</b></size>\n<size:11>PostgreSQL via Prisma 7 (driver adapter @prisma/adapter-pg) · uuid primary keys · soft delete on 6 of 9 tables</size>
+
+' ------------------------------------------------------------------
+'  AUTHENTICATION / IDENTITY  (better-auth managed tables)
+' ------------------------------------------------------------------
+package "Identity & Session  ·  auth.prisma" as PkgAuth #FBFCFE {
+
+  entity "user" as User {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * name : text
+    * email : text <<UNIQUE>>
+    * emailVerified : boolean = false
+    * role : <<Role>> = USER
+    * status : <<UserStatus>> = ACTIVE
+    --
+    image : text
+    --
+    * isDeleted : boolean = false
+    deletedAt : timestamp
+    * createdAt : timestamp = now()
+    * updatedAt : timestamp
+    --
+    <i>@@map("user")</i>
+  }
+
+  entity "session" as Session {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * token : text <<UNIQUE>>
+    * expiresAt : timestamp
+    ipAddress : text
+    userAgent : text
+    --
+    * <b>userId</b> : uuid <<FK>> -> user
+    --
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>@@index([userId])  ·  onDelete: Cascade</i>
+  }
+
+  entity "account" as Account {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * accountId : text
+    * providerId : text
+    --
+    password : text  <i>(credential hash)</i>
+    accessToken : text
+    refreshToken : text
+    idToken : text
+    accessTokenExpiresAt : timestamp
+    refreshTokenExpiresAt : timestamp
+    scope : text
+    --
+    * <b>userId</b> : uuid <<FK>> -> user
+    --
+    <i>@@index([userId])  ·  onDelete: Cascade</i>
+  }
+
+  entity "verification" as Verification {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * identifier : text  <i>(email)</i>
+    * value : text  <i>(6-digit OTP)</i>
+    * expiresAt : timestamp
+    --
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>@@index([identifier])  ·  OTP TTL 120s</i>
+  }
+}
+
+' ------------------------------------------------------------------
+'  EVENT DOMAIN
+' ------------------------------------------------------------------
+package "Event Domain  ·  event.prisma" as PkgEvent #FCFBF8 {
+
+  entity "Event" as Event {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * title : text
+    * description : text
+    image : text  <i>(Cloudinary URL)</i>
+    * eventDateTime : timestamp
+    venue : text
+    eventLink : text
+    --
+    * visibility : <<EventVisibility>>
+    * feeType : <<FeeType>> = FREE
+    * status : <<EventStatus>> = ACTIVE
+    * registrationFee : float = 0
+    --
+    * <b>ownerId</b> : uuid <<FK>> -> user
+    --
+    * isDeleted : boolean = false
+    deletedAt : timestamp
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>6 indexes incl.</i>
+    <i>[isDeleted, visibility, eventDateTime]</i>
+  }
+
+  entity "EventParticipant" as Participant {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * <b>eventId</b> : uuid <<FK>> -> Event
+    * <b>userId</b> : uuid <<FK>> -> user
+    --
+    * status : <<ParticipationStatus>> = PENDING
+    * paymentStatus : <<PaymentStatus>> = PENDING
+    paidAmount : float
+    --
+    * requestedAt : timestamp = now()
+    approvedAt : timestamp
+    rejectedAt : timestamp
+    bannedAt : timestamp
+    --
+    * isDeleted : boolean = false
+    deletedAt : timestamp
+    --
+    <i>@@unique([eventId, userId])</i>
+    <i>one join request per user per event</i>
+  }
+
+  entity "EventInvitation" as Invitation {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * <b>eventId</b> : uuid <<FK>> -> Event
+    * <b>userId</b> : uuid <<FK>> -> user  <i>(invitee)</i>
+    * <b>invitedById</b> : uuid <<FK>> -> user  <i>(host)</i>
+    --
+    * status : <<InvitationStatus>>
+    --
+    * isDeleted : boolean = false
+    deletedAt : timestamp
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>@@unique([eventId, userId])</i>
+  }
+
+  entity "EventReview" as Review {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * <b>eventId</b> : uuid <<FK>> -> Event
+    * <b>userId</b> : uuid <<FK>> -> user
+    --
+    * rating : int  <i>(1..5)</i>
+    review : text
+    --
+    * isDeleted : boolean = false
+    deletedAt : timestamp
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>@@unique([eventId, userId])</i>
+    <i>editable 7 days from eventDateTime</i>
+  }
+}
+
+' ------------------------------------------------------------------
+'  PAYMENT DOMAIN
+' ------------------------------------------------------------------
+package "Payment Domain  ·  payment.prisma" as PkgPay #F8FCF9 {
+
+  entity "PaymentTransaction" as Payment {
+    * <b>id</b> : uuid <<PK>>
+    --
+    * trxId : text <<UNIQUE>>
+    <i>planora_{timestamp}_{participantId[0:8]}</i>
+    * gateway : <<PaymentGateway>> = SSLCOMMERZ
+    --
+    * <b>userId</b> : uuid <<FK>> -> user
+    * <b>eventId</b> : uuid <<FK>> -> Event
+    <b>eventParticipantId</b> : uuid <<FK>> -> EventParticipant
+    --
+    * amount : float
+    * currency : text = "BDT"
+    * status : <<TransactionStatus>> = INITIATED
+    --
+    valId : text
+    gatewayTransactionId : text
+    bankTransactionId : text
+    cardType : text
+    storeAmount : float
+    verifyPayload : jsonb
+    gatewayResponse : jsonb
+    --
+    successUrl : text
+    failUrl : text
+    cancelUrl : text
+    --
+    * createdAt : timestamp
+    * updatedAt : timestamp
+    --
+    <i>no soft-delete columns</i>
+  }
+}
+
+' ------------------------------------------------------------------
+'  ENUMERATIONS  (enums.prisma)
+' ------------------------------------------------------------------
+package "Enumerations  ·  enums.prisma" as PkgEnum #FFFDF6 {
+
+  enum Role {
+    SUPER_ADMIN
+    ADMIN
+    USER
+  }
+
+  enum UserStatus {
+    ACTIVE
+    BLOCKED
+    DELETED
+  }
+
+  enum EventVisibility {
+    PUBLIC
+    PRIVATE
+  }
+
+  enum FeeType {
+    FREE
+    PAID
+  }
+
+  enum EventStatus {
+    ACTIVE
+    COMPLETED
+    CANCELLED
+  }
+
+  enum ParticipationStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    JOINED
+    BANNED
+  }
+
+  enum PaymentStatus {
+    PENDING
+    PAID
+    FAILED
+  }
+
+  enum InvitationStatus {
+    PENDING
+    ACCEPTED
+    REJECTED
+  }
+
+  enum PaymentGateway {
+    SSLCOMMERZ
+  }
+
+  enum TransactionStatus {
+    INITIATED
+    VALID
+    FAILED
+    CANCELLED
+  }
+}
+
+' ------------------------------------------------------------------
+'  RELATIONSHIPS
+' ------------------------------------------------------------------
+User ||--o{ Session         : "has active\nsessions"
+User ||--o{ Account         : "credential +\nOAuth providers"
+User ||--o{ Event           : "owns / hosts"
+User ||--o{ Participant     : "requests to join"
+User ||--o{ Review          : "writes"
+User ||--o{ Invitation      : "receives\n<EventInvitationUser>"
+User ||--o{ Invitation      : "sends\n<EventInvitationInvitedBy>"
+User ||--o{ Payment         : "pays"
+
+Event ||--o{ Participant    : "collects\njoin requests"
+Event ||--o{ Invitation     : "issues"
+Event ||--o{ Review         : "receives\n(after COMPLETED)"
+Event ||--o{ Payment        : "billed for"
+
+Participant |o--o{ Payment  : "settled by\n(SetNull)"
+
+' Enum bindings (dashed = typed by)
+User        .[#B4791F].>  Role                 : role
+User        .[#B4791F].>  UserStatus           : status
+Event       .[#B4791F].>  EventVisibility      : visibility
+Event       .[#B4791F].>  FeeType              : feeType
+Event       .[#B4791F].>  EventStatus          : status
+Participant .[#B4791F].>  ParticipationStatus  : status
+Participant .[#B4791F].>  PaymentStatus        : paymentStatus
+Invitation  .[#B4791F].>  InvitationStatus     : status
+Payment     .[#B4791F].>  PaymentGateway       : gateway
+Payment     .[#B4791F].>  TransactionStatus    : status
+
+' ------------------------------------------------------------------
+'  DOMAIN RULES WORTH READING WITH THE MODEL
+' ------------------------------------------------------------------
+note bottom of Participant
+  <b>Join-request lifecycle</b>
+  1. joinEvent -> status PENDING
+     FREE  event: paymentStatus = PAID, paidAmount = 0
+     PAID  event: paymentStatus = PENDING
+  2. Host/Admin approve -> status JOINED (+ approvedAt)
+     blocked while feeType = PAID and paymentStatus != PAID
+  3. reject -> REJECTED   ·   ban -> BANNED
+  <i>APPROVED is read by the recommender and review</i>
+  <i>eligibility checks but never written by the app.</i>
+end note
+
+note bottom of Payment
+  <b>SSLCommerz settlement</b>
+  INITIATED -> gateway hosted page
+  success callback validates val_id, then in one
+  transaction: status = VALID and the participant's
+  paymentStatus = PAID (+ paidAmount).
+  Participation stays PENDING so the host still
+  approves manually. fail/cancel -> FAILED / CANCELLED
+  and participant paymentStatus = FAILED.
+end note
+
+note bottom of User
+  <b>Role escalation policy</b> (admin.service)
+  · nobody edits their own role or status
+  · SUPER_ADMIN can never be assigned via API
+  · SUPER_ADMIN rows are immutable here
+  · ADMIN may only promote USER -> ADMIN
+  · only SUPER_ADMIN may demote ADMIN -> USER
+  · block/delete refuse ADMIN & SUPER_ADMIN targets
+  Deletes are soft: status DELETED + isDeleted.
+end note
+
+@enduml

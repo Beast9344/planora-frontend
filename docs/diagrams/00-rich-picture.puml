@@ -1,0 +1,194 @@
+@startuml Planora-Rich-Picture
+' =============================================================
+'  PLANORA - RICH PICTURE  (Soft Systems Methodology style)
+'  An editable PlantUML approximation of the hand-drawn rich
+'  picture. The SVG/PNG version in this folder is the one to
+'  put in a report; this one is here so you can edit it.
+'
+'  Rich picture conventions used:
+'    actor        = a human stakeholder / role
+'    rectangle    = a system, process or activity
+'    cloud        = an outside party the project does not control
+'    note (amber) = a concern, tension or worry  (thought bubble)
+'    solid arrow  = flow of work, money or data
+'    dashed arrow = influence, pressure or dependency
+' =============================================================
+!theme plain
+skinparam shadowing false
+skinparam roundcorner 14
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowThickness 1.3
+skinparam ArrowColor #33507E
+skinparam packageStyle rectangle
+skinparam linetype polyline
+
+skinparam actor {
+  BackgroundColor #E7EDF9
+  BorderColor #2B4372
+  FontColor #16233B
+  FontStyle bold
+}
+skinparam rectangle {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam cloud {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+  FontColor #14301D
+}
+skinparam note {
+  BackgroundColor #FFF6E0
+  BorderColor #C58A1E
+  FontColor #4A3106
+  FontStyle italic
+}
+
+title <size:20><b>Planora — Rich Picture</b></size>\n<size:12>Who is involved, what they are trying to do, what gets in the way</size>
+
+' =================================================================
+'  THE PEOPLE
+' =================================================================
+package "People in the picture" as People #FBFCFE {
+  actor "Guest\nbrowsing for\nsomething to do" as Guest
+  actor "Participant\nwants a seat at\nthe right event" as Participant
+  actor "Event host\nruns the event,\nowns the guest list" as Host
+  actor "Admin\nkeeps the platform\nclean and safe" as Admin
+  actor "Super Admin\nlast word on\nwho holds power" as SuperAdmin
+}
+
+' =================================================================
+'  THE PLATFORM
+' =================================================================
+package "Planora platform" as Platform #F7F9FC {
+
+  rectangle "**Discover**\nbrowse, search,\nask the assistant" as Discover
+  rectangle "**Publish**\ncreate an event,\nset price and\nvisibility" as Publish
+  rectangle "**Gate**\ninvite, review\nrequests, approve\nor turn away" as Gate
+  rectangle "**Collect**\ntake the fee,\nconfirm it landed" as Collect
+  rectangle "**Attend**\nshow up,\nthen say how\nit went" as Attend
+  rectangle "**Oversee**\nstats, reports,\nblock and remove" as Oversee
+
+  rectangle "One shared record\nevents · participants\ninvitations · reviews\npayments · accounts" as Records #EAF3EC
+}
+
+' =================================================================
+'  OUTSIDE PARTIES
+' =================================================================
+package "Outside our control" as Outside #F6FBF7 {
+  cloud "SSLCommerz\nholds the money\nuntil it says\nthe payment is real" as SSL
+  cloud "Google\nvouches for\nwho someone is" as Google
+  cloud "Mail delivery\ncarries the OTP\nthat unlocks\nthe account" as Mail
+  cloud "Cloudinary\nstores every\nposter and avatar" as Cloud
+  cloud "OpenRouter LLM\nanswers questions\nabout events" as LLM
+}
+
+' =================================================================
+'  WHAT FLOWS
+' =================================================================
+Guest --> Discover : "looks around,\nno account needed"
+Guest ..> Google : "signs up the\nquick way"
+Guest --> Participant : "registers and\nverifies email"
+
+Participant --> Discover : "finds an event"
+Participant --> Gate : "asks to join"
+Participant --> Collect : "pays the fee"
+Participant --> Attend : "turns up"
+Attend --> Records : "leaves a rating\nand a review"
+
+Host --> Publish : "sets it up"
+Publish --> Records
+Host --> Gate : "decides who\ngets in"
+Host ..> Collect : "wants the money\nsettled before\nsaying yes"
+Records ..> Host : "reviews shape\nthe host's\nreputation"
+
+Admin --> Oversee
+Oversee --> Records : "reads everything,\nremoves what\ndoes not belong"
+Admin ..> Host : "can delete any\nevent, block\nany account"
+SuperAdmin ..> Admin : "grants and\nrevokes admin"
+
+Discover --> Records
+Gate --> Records
+Collect --> Records
+
+Collect <--> SSL : "hosted page,\nthen a callback\nthat must be\nverified"
+Publish --> Cloud : "poster upload"
+Discover --> LLM : "grounded on real\nevent rows only"
+Gate ..> Mail
+Google ..> Records : "identity becomes\nan account"
+Mail ..> Participant : "the code that\nunlocks access"
+
+' =================================================================
+'  CONCERNS  ·  the part that makes it a rich picture
+' =================================================================
+note top of Collect
+  <b>Paying is not the same as being admitted.</b>
+  Money can be taken and the seat still refused.
+  The host approves separately, so a paid
+  participant sits in PENDING until they act.
+end note
+
+note right of SSL
+  <b>What if the callback never arrives?</b>
+  The browser redirect and the IPN can both
+  land, or neither. Verification is idempotent
+  on VALID so a double callback is harmless —
+  but a silent one leaves money taken and
+  nothing recorded.
+end note
+
+note bottom of Gate
+  <b>Accepting an invitation only gets you in line.</b>
+  It creates a PENDING participant, not a seat.
+  Invitees reasonably expect a private invite
+  to mean they are already in.
+end note
+
+note left of Mail
+  <b>The whole account depends on one email.</b>
+  Verification is required to sign in, the OTP
+  lives for 120 seconds, and delivery is the one
+  step nobody on the team controls.
+end note
+
+note bottom of Discover
+  <b>The assistant is open to anyone.</b>
+  No login, and only a per-instance in-memory
+  limit of 20 requests a minute. On serverless
+  that cap resets with every cold start.
+end note
+
+note right of LLM
+  <b>Trust boundary.</b> The model is told never to
+  invent an event, price, date or venue, and is
+  handed only real upcoming public rows. Its
+  usefulness is capped by how good that
+  retrieval is.
+end note
+
+note bottom of Oversee
+  <b>Nothing is ever really deleted.</b>
+  Users, events, participants, invitations and
+  reviews are all soft-deleted, so the record
+  keeps growing and every query has to
+  remember to exclude it.
+end note
+
+note right of Host
+  <b>Hosts and participants are the same people.</b>
+  One account does both jobs. Someone can host
+  a paid summit in the morning and ask to join
+  someone else's meetup in the afternoon.
+end note
+
+note top of Records
+  <b>Two ideas of identity, one table.</b>
+  better-auth sessions and the app's own JWTs
+  both authorise requests. They have to agree,
+  or a user's role in the token drifts from
+  their role in the database.
+end note
+
+@enduml

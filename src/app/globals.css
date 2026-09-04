@@ -1,0 +1,567 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Legibility-first text tokens — see :root / .dark for values */
+  --color-ink-strong: var(--ink-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-on-brand-strong: var(--on-brand-strong);
+  --color-on-brand: var(--on-brand);
+  --color-on-brand-soft: var(--on-brand-soft);
+
+  /* Brand accents (same blue family as --primary, plus the existing warm CTA) */
+  --color-brand-1: var(--brand-1);
+  --color-brand-2: var(--brand-2);
+  --color-brand-3: var(--brand-3);
+  --color-brand-warm: var(--brand-warm);
+
+  /* Motion tokens -> generate animate-* utilities */
+  --animate-aurora: aurora 22s ease-in-out infinite;
+  --animate-aurora-slow: aurora 38s ease-in-out infinite;
+  --animate-orb: orb-float 18s ease-in-out infinite;
+  --animate-orb-slow: orb-float 26s ease-in-out infinite;
+  --animate-sheen: sheen 6s linear infinite;
+  --animate-conic: conic-spin 8s linear infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-marquee: marquee 46s linear infinite;
+  --animate-marquee-reverse: marquee-reverse 46s linear infinite;
+  --animate-ping-ring: ping-ring 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-caret: caret 1.05s step-end infinite;
+  --animate-tilt: tilt 12s ease-in-out infinite;
+  --animate-grid-drift: grid-drift 30s linear infinite;
+}
+
+:root {
+  --background: oklch(0.98 0.008 250);
+  --foreground: oklch(0.24 0.03 255);
+  --card: oklch(1 0.004 250);
+  --card-foreground: oklch(0.24 0.03 255);
+  --popover: oklch(1 0.004 250);
+  --popover-foreground: oklch(0.24 0.03 255);
+  --primary: oklch(0.39 0.09 257);
+  --primary-foreground: oklch(0.98 0.01 250);
+  --secondary: oklch(0.94 0.015 250);
+  --secondary-foreground: oklch(0.28 0.03 257);
+  --muted: oklch(0.95 0.012 250);
+  --muted-foreground: oklch(0.5 0.025 255);
+  --accent: oklch(0.93 0.03 252);
+  --accent-foreground: oklch(0.28 0.03 257);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.88 0.015 250);
+  --input: oklch(0.88 0.015 250);
+  --ring: oklch(0.62 0.07 257);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.97 0.01 250);
+  --sidebar-foreground: oklch(0.24 0.03 255);
+  --sidebar-primary: oklch(0.39 0.09 257);
+  --sidebar-primary-foreground: oklch(0.98 0.01 250);
+  --sidebar-accent: oklch(0.94 0.015 250);
+  --sidebar-accent-foreground: oklch(0.28 0.03 257);
+  --sidebar-border: oklch(0.88 0.015 250);
+  --sidebar-ring: oklch(0.62 0.07 257);
+
+  /* --- Day mode: text ramp tuned for legibility on --background 0.98 ---
+     Measured against background / card / muted, every step below clears
+     WCAG AA for normal text; ink-strong through brand-1 clear AAA. */
+  --ink-strong: oklch(0.18 0.035 258);
+  --ink: oklch(0.28 0.03 256);
+  --ink-soft: oklch(0.44 0.028 256);
+  --ink-faint: oklch(0.52 0.025 256);
+
+  /* Text sitting on a saturated brand surface (light mode --primary is dark) */
+  --on-brand-strong: oklch(0.99 0.004 250);
+  --on-brand: oklch(0.95 0.012 250);
+  --on-brand-soft: oklch(0.87 0.02 250);
+
+  /* Accents kept in the same blue family; all dark enough to read as text */
+  --brand-1: oklch(0.42 0.13 258);
+  --brand-2: oklch(0.47 0.17 272);
+  --brand-3: oklch(0.44 0.15 232);
+  --brand-warm: oklch(0.52 0.16 55);
+
+  /* Decorative-only wash colours (never used for text) */
+  --glow-1: oklch(0.62 0.19 262 / 0.28);
+  --glow-2: oklch(0.66 0.16 232 / 0.24);
+  --glow-3: oklch(0.72 0.16 60 / 0.2);
+  --mesh-alpha: 0.5;
+  --grid-line: oklch(0.42 0.05 257 / 0.07);
+}
+
+.dark {
+  --background: oklch(0.2 0.02 257);
+  --foreground: oklch(0.96 0.01 250);
+  --card: oklch(0.24 0.02 257);
+  --card-foreground: oklch(0.96 0.01 250);
+  --popover: oklch(0.24 0.02 257);
+  --popover-foreground: oklch(0.96 0.01 250);
+  --primary: oklch(0.73 0.1 252);
+  --primary-foreground: oklch(0.2 0.02 257);
+  --secondary: oklch(0.29 0.02 257);
+  --secondary-foreground: oklch(0.96 0.01 250);
+  --muted: oklch(0.29 0.02 257);
+  --muted-foreground: oklch(0.77 0.02 252);
+  --accent: oklch(0.33 0.03 252);
+  --accent-foreground: oklch(0.96 0.01 250);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(0.36 0.02 257);
+  --input: oklch(0.36 0.02 257);
+  --ring: oklch(0.73 0.1 252);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.22 0.02 257);
+  --sidebar-foreground: oklch(0.96 0.01 250);
+  --sidebar-primary: oklch(0.73 0.1 252);
+  --sidebar-primary-foreground: oklch(0.2 0.02 257);
+  --sidebar-accent: oklch(0.29 0.02 257);
+  --sidebar-accent-foreground: oklch(0.96 0.01 250);
+  --sidebar-border: oklch(0.36 0.02 257);
+  --sidebar-ring: oklch(0.73 0.1 252);
+
+  /* --- Night mode: same ramp, inverted, on --background 0.2 --- */
+  --ink-strong: oklch(0.985 0.006 250);
+  --ink: oklch(0.93 0.012 250);
+  --ink-soft: oklch(0.81 0.02 252);
+  --ink-faint: oklch(0.7 0.022 252);
+
+  /* Brand surfaces stay dark at night, so on-brand text stays light */
+  --on-brand-strong: oklch(0.985 0.006 250);
+  --on-brand: oklch(0.93 0.012 250);
+  --on-brand-soft: oklch(0.8 0.02 252);
+
+  /* Accents lifted above L 0.78 so they never sink into the dark bg */
+  --brand-1: oklch(0.82 0.09 252);
+  --brand-2: oklch(0.8 0.12 275);
+  --brand-3: oklch(0.85 0.1 225);
+  --brand-warm: oklch(0.83 0.12 65);
+
+  /* Decorative-only wash colours (never used for text) */
+  --glow-1: oklch(0.55 0.2 264 / 0.4);
+  --glow-2: oklch(0.58 0.17 230 / 0.34);
+  --glow-3: oklch(0.62 0.16 58 / 0.24);
+  --mesh-alpha: 0.72;
+  --grid-line: oklch(0.85 0.04 252 / 0.07);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* =========================================================================
+   KEYFRAMES
+   Every name here is referenced by an --animate-* token in @theme inline,
+   which is what turns them into animate-<name> utilities.
+   ========================================================================= */
+
+@keyframes aurora {
+  0%,
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1.05);
+  }
+  33% {
+    transform: translate3d(5%, 3%, 0) scale(1.18);
+  }
+  66% {
+    transform: translate3d(-2%, 5%, 0) scale(1.1);
+  }
+}
+
+@keyframes orb-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -22px, 0) scale(1.06);
+  }
+}
+
+@keyframes sheen {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes conic-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes marquee-reverse {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes ping-ring {
+  0% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
+  }
+}
+
+@keyframes caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes tilt {
+  0%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
+  }
+}
+
+@keyframes grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 64px 64px;
+  }
+}
+
+/* =========================================================================
+   UTILITIES
+   ========================================================================= */
+
+@layer utilities {
+  /* ---- Headline gradient that stays readable in BOTH themes -------------
+     Day: every stop sits at L <= 0.47 against an L 0.98 page.
+     Night: every stop sits at L >= 0.80 against an L 0.20 page.
+     A plain colour is set first so the text is still legible if a browser
+     drops background-clip: text. */
+  .text-brand-gradient {
+    color: var(--brand-1);
+    background-image: linear-gradient(
+      100deg,
+      var(--brand-1) 0%,
+      var(--brand-2) 42%,
+      var(--brand-3) 74%,
+      var(--brand-1) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* keeps descenders from being clipped */
+    padding-bottom: 0.08em;
+  }
+
+  @supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+    .text-brand-gradient {
+      background-image: none;
+      -webkit-text-fill-color: currentColor;
+    }
+  }
+
+  .text-brand-gradient-animated {
+    animation: var(--animate-sheen);
+  }
+
+  /* ---- Scroll reveal ---------------------------------------------------
+     RevealOnScroll renders .reveal and flips to .reveal-in via
+     IntersectionObserver. Content is only ever dimmed, never
+     display:none, so it is present for crawlers and screen readers. */
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+    transition:
+      opacity 0.72s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+  .reveal-in {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Directional variants */
+  .reveal-left {
+    transform: translate3d(-26px, 0, 0);
+  }
+  .reveal-right {
+    transform: translate3d(26px, 0, 0);
+  }
+  .reveal-scale {
+    transform: scale(0.94);
+  }
+  .reveal-left.reveal-in,
+  .reveal-right.reveal-in,
+  .reveal-scale.reveal-in {
+    transform: none;
+  }
+
+  /* ---- Surfaces -------------------------------------------------------- */
+  .surface-glass {
+    background-color: color-mix(in oklab, var(--card) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  }
+
+  /* Gradient hairline border that reads on both themes */
+  .ring-gradient {
+    position: relative;
+  }
+  .ring-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      140deg,
+      color-mix(in oklab, var(--brand-1) 55%, transparent),
+      transparent 45%,
+      color-mix(in oklab, var(--brand-3) 45%, transparent)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Soft blueprint grid for section backdrops */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  /* Radial glow blobs (decorative only) */
+  .glow-1 {
+    background: radial-gradient(circle at 50% 50%, var(--glow-1), transparent 68%);
+  }
+  .glow-2 {
+    background: radial-gradient(circle at 50% 50%, var(--glow-2), transparent 68%);
+  }
+  .glow-3 {
+    background: radial-gradient(circle at 50% 50%, var(--glow-3), transparent 68%);
+  }
+
+  /* Fade a marquee / scroller out at both edges */
+  .mask-edges-x {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 8%,
+      #000 92%,
+      transparent
+    );
+    mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  }
+
+  /* Hover lift used on every card in the redesign */
+  .lift {
+    transition:
+      transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.35s ease;
+  }
+  .lift:hover {
+    transform: translate3d(0, -6px, 0);
+  }
+
+  /* Tabular numerals for count-up figures so widths don't jitter */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* Stagger helper: set --reveal-delay from a utility class */
+  .delay-step-1 {
+    --reveal-delay: 70ms;
+  }
+  .delay-step-2 {
+    --reveal-delay: 140ms;
+  }
+  .delay-step-3 {
+    --reveal-delay: 210ms;
+  }
+  .delay-step-4 {
+    --reveal-delay: 280ms;
+  }
+  .delay-step-5 {
+    --reveal-delay: 350ms;
+  }
+  .delay-step-6 {
+    --reveal-delay: 420ms;
+  }
+  .delay-step-7 {
+    --reveal-delay: 490ms;
+  }
+  .delay-step-8 {
+    --reveal-delay: 560ms;
+  }
+}
+
+/* =========================================================================
+   ACCESSIBILITY
+   Anything decorative stops moving; anything that carries content is
+   revealed immediately so no information is ever hidden behind motion.
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal,
+  .reveal-left,
+  .reveal-right,
+  .reveal-scale {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .text-brand-gradient-animated {
+    animation: none !important;
+  }
+
+  /* A marquee is useless when it cannot move — let the cards wrap into a
+     normal, fully readable block instead of sitting clipped off-screen. */
+  .marquee-row {
+    overflow: visible !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  .marquee-track {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    transform: none !important;
+    animation: none !important;
+    width: 100% !important;
+  }
+  .marquee-track > * {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    flex-shrink: 1 !important;
+    padding-right: 0 !important;
+  }
+  .marquee-clone {
+    display: none !important;
+  }
+}
+
+/* Respect Windows / macOS high-contrast and forced-colors modes */
+@media (forced-colors: active) {
+  .text-brand-gradient {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: CanvasText;
+  }
+}
+

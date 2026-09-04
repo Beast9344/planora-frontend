@@ -1,0 +1,602 @@
+' =============================================================
+'  PLANORA - KEY SEQUENCE DIAGRAMS
+'  This file holds five @startuml blocks; PlantUML renders one
+'  image per block, named after the block.
+'  Every call below was traced through the real source.
+' =============================================================
+
+'  ============================================================
+'  1 of 5  ·  REGISTRATION + EMAIL OTP VERIFICATION
+'  ============================================================
+@startuml Planora-Seq-1-Register-Verify
+!theme plain
+skinparam shadowing false
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam sequenceGroupBorderColor #33507E
+skinparam sequenceGroupBackgroundColor #EEF3FB
+skinparam participant {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+}
+skinparam note {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+}
+
+title <size:16><b>1 · Registration and email OTP verification</b></size>\n<size:11>requireEmailVerification is on, so the account exists but cannot pass the proxy until the OTP is confirmed</size>
+
+actor "Visitor" as U
+participant "RegisterForm\n<i>client</i>" as Form
+participant "registerAction\n<i>server action</i>" as Action
+participant "auth.controller" as Ctl
+participant "auth.service" as Svc
+participant "better-auth\nlib/auth.ts" as BA
+participant "utils/email.ts\n<i>nodemailer + ejs</i>" as Mail
+database "PostgreSQL" as DB
+participant "SMTP" as SMTP
+
+U -> Form : fill name, email, password
+Form -> Action : registerAction(payload, redirect?)
+Action -> Action : zod validate
+Action -> Ctl : POST /api/v1/auth/register
+
+Ctl -> Svc : registerUser(payload)
+Svc -> BA : auth.api.signUpEmail()
+BA -> DB : INSERT user\n(emailVerified = false, role = USER)
+BA -> DB : INSERT account\n(providerId = credential, password hash)
+
+group emailOTP plugin  ·  otpLength 6, expiresIn 120s
+  BA -> DB : INSERT verification\n(identifier = email, value = OTP)
+  BA -> Mail : sendVerificationOTP hook
+  Mail -> Mail : ejs.renderFile(templates/otp.ejs)
+  Mail -> SMTP : sendMail(html)
+  SMTP --> U : <b>OTP email</b>
+end
+
+BA --> Svc : { user }
+Svc -> Svc : createToken x2\naccessToken + refreshToken
+Svc --> Ctl : { user, accessToken, refreshToken }
+Ctl --> Action : 201 { success, data }
+
+Action -> Action : setTokenInCookies x3\naccessToken · refreshToken\nbetter-auth.session_token
+note right of Action
+  maxAge is derived from each JWT's own <i>exp</i>.
+  The better-auth cookie is opaque, so it takes
+  the 24 h fallback instead.
+  Flags: httpOnly, secure, sameSite = none.
+end note
+
+Action --> U : redirect /verify-email?email=...
+
+== OTP confirmation ==
+
+U -> Form : enter 6-digit OTP
+Form -> Action : verifyEmailAction({ email, otp })
+Action -> Ctl : POST /api/v1/auth/verify-email
+Ctl -> Svc : verifyEmail(payload)
+Svc -> BA : auth.api.verifyEmailOTP()
+BA -> DB : SELECT verification\nWHERE identifier = email
+
+alt OTP valid and not expired
+  BA -> DB : DELETE verification row
+  BA --> Svc : ok
+  Svc -> DB : UPDATE user SET emailVerified = true
+  note right of Svc
+    The service force-sets the flag in Prisma rather
+    than trusting better-auth's own write, so the two
+    stores cannot drift apart.
+  end note
+  Svc --> Ctl : verified
+  Ctl --> Action : 200
+
+  Action -> Action : logoutAction()
+  note left of Action
+    <b>Deliberate forced re-login.</b>
+    The access token minted at registration still
+    carries emailVerified = false. Clearing the
+    cookies makes the next login issue a token
+    that the proxy will accept.
+  end note
+  Action --> U : redirect /login?verified=1
+
+else OTP wrong or expired
+  BA --> Svc : throw
+  Svc --> Ctl : AppError
+  Ctl --> Action : 4xx { message }
+  Action --> Form : { success: false, message }
+  Form --> U : inline error + "Resend code"
+  U -> Action : resendVerificationOtpAction
+  Action -> Ctl : POST /auth/resend-verification-otp
+  Ctl -> BA : sendVerificationOTP
+  BA -> SMTP : new OTP mail
+end
+
+@enduml
+
+
+'  ============================================================
+'  2 of 5  ·  GOOGLE OAUTH SIGN-IN
+'  ============================================================
+@startuml Planora-Seq-2-Google-OAuth
+!theme plain
+skinparam shadowing false
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam sequenceGroupBorderColor #33507E
+skinparam sequenceGroupBackgroundColor #EEF3FB
+skinparam participant {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+}
+skinparam note {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+}
+
+title <size:16><b>2 · Google OAuth sign-in</b></size>\n<size:11>Tokens cross the domain boundary in the query string because the API and the app sit on different hosts</size>
+
+actor "Visitor" as U
+participant "Browser" as B
+participant "auth.controller\n/api/v1/auth" as Ctl
+participant "googleRedirect.ejs" as EJS
+participant "better-auth\n/api/auth/*" as BA
+participant "Google OAuth 2.0" as G
+participant "Next route handler\n/api/auth/google/callback" as Landing
+database "PostgreSQL" as DB
+
+U -> B : click "Continue with Google"
+B -> Ctl : GET /api/v1/auth/login/google
+Ctl --> B : 200 render googleRedirect.ejs
+
+B -> EJS : execute inline script
+EJS -> BA : POST /api/auth/sign-in/social\n{ provider: "google", callbackURL }
+BA --> EJS : { url }
+EJS -> B : window.location = url
+B -> G : authorization request
+
+U -> G : choose account, grant consent
+G --> BA : redirect with authorization code
+
+group better-auth social callback
+  BA -> G : exchange code for tokens
+  G --> BA : id_token + access_token + profile
+  BA -> DB : SELECT user WHERE email = profile.email
+  alt first Google sign-in
+    BA -> DB : INSERT user\nmapProfileToUser forces role = USER,\nstatus = ACTIVE, emailVerified = true
+  end
+  BA -> DB : UPSERT account\n(providerId = google, tokens, scope)
+  BA -> DB : INSERT session (token, expiresAt)
+  BA --> B : Set-Cookie better-auth.session_token
+end
+
+BA --> B : redirect /api/v1/auth/google/success
+
+B -> Ctl : GET /auth/google/success\n(cookie: better-auth.session_token)
+Ctl -> BA : auth.api.getSession(headers)
+BA -> DB : SELECT session JOIN user
+BA --> Ctl : { session, user }
+
+alt no session resolved
+  Ctl --> B : redirect /auth/oauth/error
+  B --> U : "Sign-in could not be completed"
+else session resolved
+  Ctl -> DB : SELECT user WHERE email
+  alt row missing
+    Ctl -> DB : INSERT user (backfill)
+  end
+  Ctl -> Ctl : createToken accessToken + refreshToken
+  note right of Ctl
+    <b>Known wrinkle.</b> googleLoginSuccess hardcodes
+    role: 'USER' into the JWT payload. checkAuth
+    re-reads the true role from the session path,
+    so an admin still resolves correctly server-side.
+  end note
+
+  Ctl --> B : 302 {FRONTEND_URL}/api/auth/google/callback\n?accessToken=..&refreshToken=..&sessionToken=..&redirect=..
+  note left of Ctl
+    Query-string hand-off is intentional. The API and
+    the frontend are on different domains, so a
+    Set-Cookie from the API is not visible to the app.
+  end note
+
+  B -> Landing : GET /api/auth/google/callback?...
+  Landing -> Landing : guard redirect target\nstartsWith('/') and not '//'
+  Landing --> B : Set-Cookie x3 (httpOnly, secure, sameSite none)\naccessToken 1d · refreshToken 7d · session 1d
+  Landing --> B : redirect to validated path\nelse /dashboard
+  B --> U : signed in
+end
+
+@enduml
+
+
+'  ============================================================
+'  3 of 5  ·  PAID EVENT BOOKING THROUGH SSLCOMMERZ
+'  ============================================================
+@startuml Planora-Seq-3-Paid-Booking
+!theme plain
+skinparam shadowing false
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam sequenceGroupBorderColor #33507E
+skinparam sequenceGroupBackgroundColor #EEF3FB
+skinparam participant {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+}
+skinparam note {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+}
+
+title <size:16><b>3 · Paid event booking through SSLCommerz</b></size>\n<size:11>Payment settles the fee; it does not admit the participant — the host still approves</size>
+
+actor "Participant" as U
+actor "Event host" as H
+participant "EventBookingButton\n<i>client</i>" as Btn
+participant "initiateEventPaymentAction" as Action
+participant "payment.controller" as Ctl
+participant "payment.service" as Svc
+participant "payment.utils\n<i>fetch wrappers</i>" as Utils
+participant "SSLCommerz" as SSL
+database "PostgreSQL" as DB
+
+U -> Btn : click "Register — BDT 500"
+Btn -> Action : initiateEventPaymentAction(eventId)
+Action -> Ctl : POST /api/v1/payments/initiate
+note right of Ctl : checkAuth(ADMIN, USER)\nvalidateRequest(initiatePaymentSchema)
+
+Ctl -> Svc : initiateEventPayment(userId, eventId)
+
+group Preconditions
+  Svc -> DB : SELECT user, SELECT Event
+  alt event not found · not ACTIVE · feeType = FREE\n· caller is the owner · caller is BANNED
+    Svc --> Ctl : AppError 4xx
+    Ctl --> Action : { success: false, message }
+    Action --> U : inline error, no redirect
+  end
+end
+
+Svc -> DB : UPSERT EventParticipant\nstatus = PENDING, paymentStatus = PENDING
+Svc -> Svc : trxId = planora_{now}_{participantId[0:8]}
+Svc -> DB : INSERT PaymentTransaction\nstatus = INITIATED, amount, currency BDT,\nsuccessUrl / failUrl / cancelUrl
+
+Svc -> Utils : sslCommerzInitPayment(payload)
+Utils -> SSL : POST /gwprocess/v4/api.php\n(store_id, store_passwd, tran_id, amount, URLs)
+SSL --> Utils : { GatewayPageURL }
+Utils --> Svc : GatewayPageURL
+Svc --> Ctl : { paymentUrl }
+Ctl --> Action : 200
+Action --> U : redirect to hosted gateway page
+
+U -> SSL : choose method, authorise payment
+
+group Gateway callback  ·  no checkAuth, gateway cannot carry cookies
+  SSL -> Ctl : GET|POST /api/v1/payments/success\n{ tran_id, val_id, ... }
+  Ctl -> Svc : handlePaymentSuccess(payload)
+
+  Svc -> DB : SELECT PaymentTransaction WHERE trxId = tran_id
+
+  alt already VALID
+    Svc --> Ctl : idempotent no-op
+    note right of Svc
+      Guards against duplicate success callbacks
+      and IPN arriving after the browser redirect.
+    end note
+  else needs verification
+    Svc -> Utils : sslCommerzValidatePayment(val_id)
+    Utils -> SSL : GET /validator/api/validationserverAPI.php
+    SSL --> Utils : { status, tran_id, amount, bank_tran_id, card_type, store_amount }
+    Utils --> Svc : verification payload
+
+    alt status VALID/VALIDATED and tran_id matches
+      group single Prisma $transaction
+        Svc -> DB : UPDATE PaymentTransaction\nstatus = VALID, valId, bankTransactionId,\ncardType, storeAmount, verifyPayload
+        Svc -> DB : UPDATE EventParticipant\npaymentStatus = PAID, paidAmount
+      end
+      note right of DB
+        <b>status stays PENDING.</b> Paying settles the
+        fee only; admission is still the host's call.
+      end note
+    else mismatch or not valid
+      Svc -> DB : UPDATE PaymentTransaction status = FAILED
+      Svc -> DB : UPDATE EventParticipant paymentStatus = FAILED
+    end
+  end
+
+  Ctl --> SSL : 302 {FRONTEND_URL}/payment/success?trxId=...
+end
+
+SSL --> U : browser follows redirect
+U -> Ctl : page calls GET /payments/validate?trxId=
+Ctl --> U : event title + amount paid
+
+== Admission, later ==
+
+H -> Ctl : PATCH /api/v1/participations/{id}/approve
+Ctl -> Svc : approveParticipant
+Svc -> DB : SELECT EventParticipant + Event
+alt feeType = PAID and paymentStatus != PAID
+  Svc --> H : AppError "payment not completed"
+else cleared
+  Svc -> DB : UPDATE status = JOINED, approvedAt = now()
+  Svc --> H : participant admitted
+end
+
+@enduml
+
+
+'  ============================================================
+'  4 of 5  ·  PRIVATE EVENT INVITATION LIFECYCLE
+'  ============================================================
+@startuml Planora-Seq-4-Invitation
+!theme plain
+skinparam shadowing false
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam sequenceGroupBorderColor #33507E
+skinparam sequenceGroupBackgroundColor #EEF3FB
+skinparam participant {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+}
+skinparam note {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+}
+
+title <size:16><b>4 · Private event invitation lifecycle</b></size>\n<size:11>Accepting an invitation creates a PENDING participant — it is a foot in the door, not a seat</size>
+
+actor "Event host" as H
+actor "Invitee" as I
+participant "EventInvitationForm\n<i>client</i>" as Form
+participant "server actions\nmy-events/_actions" as Act
+participant "user.service" as USvc
+participant "invitation.service" as ISvc
+participant "InvitationResponseButtons\n<i>client</i>" as Btns
+participant "dashboard/_actions" as DAct
+database "PostgreSQL" as DB
+
+== Host builds the guest list ==
+
+H -> Form : type a name or email
+Form -> Act : searchUsersForInvitationAction(eventId, term)
+Act -> USvc : GET /api/v1/users/search?eventId=&searchTerm=&limit=12
+USvc -> DB : SELECT user WHERE ACTIVE and not deleted\nAND (name ILIKE term OR email ILIKE term)
+USvc -> USvc : exclude caller, event owner,\nalready invited, already participating
+note right of USvc
+  The exclusion set is why the picker never offers
+  someone who already has an invitation or a join
+  request for this event.
+end note
+USvc --> Form : candidate list
+
+H -> Form : select a user, send invite
+Form -> Act : inviteUserToEventAction(eventId, userId)
+Act -> ISvc : POST /api/v1/invitations/events/{eventId}
+note right of ISvc : checkAuth(ADMIN, USER)\nvalidateRequest(createInvitationSchema)
+
+ISvc -> DB : SELECT Event, SELECT invitee
+alt not owner and not admin
+  ISvc --> Act : AppError 403
+else inviting yourself · invitee deleted\n· event not ACTIVE · already invited or participating
+  ISvc --> Act : AppError 400
+else accepted
+  ISvc -> DB : INSERT EventInvitation\nstatus = PENDING, invitedById = host
+  ISvc --> Act : invitation created
+  Act --> H : "Invitation sent"
+end
+
+== Invitee responds ==
+
+I -> Btns : open /dashboard/invitations
+Btns -> DAct : page load fetches GET /api/v1/invitations/me
+DAct -> ISvc : getMyInvitations (QueryBuilder paging)
+ISvc -> DB : SELECT EventInvitation WHERE userId = me
+ISvc -> DB : second SELECT to hydrate invitedByUser
+note right of ISvc
+  The inviter is fetched with a follow-up query
+  rather than a Prisma include on the
+  EventInvitationInvitedBy relation.
+end note
+ISvc --> Btns : invitations + host names
+
+alt Accept
+  I -> Btns : click "Accept"
+  Btns -> DAct : respondInvitationAction(id, 'accept')
+  DAct -> ISvc : PATCH /api/v1/invitations/{id}/accept
+  group single Prisma $transaction
+    ISvc -> DB : UPDATE EventInvitation status = ACCEPTED
+    ISvc -> DB : INSERT EventParticipant\nstatus = PENDING\npaymentStatus = PAID if FREE else PENDING
+  end
+  ISvc --> DAct : accepted
+  DAct -> DAct : revalidatePath /dashboard/invitations\n+ /dashboard/pending-invitations
+  DAct --> I : "Invitation accepted"
+  note over I, DB
+    Still <b>PENDING</b>. For a paid event the invitee
+    must also pay, and the host must approve, before
+    the status becomes JOINED.
+  end note
+else Reject
+  I -> Btns : click "Decline"
+  Btns -> DAct : respondInvitationAction(id, 'reject')
+  DAct -> ISvc : PATCH /api/v1/invitations/{id}/reject
+  ISvc -> DB : UPDATE EventInvitation status = REJECTED
+  ISvc --> DAct : rejected
+  DAct --> I : "Invitation declined"
+end
+
+== Host closes the loop ==
+
+H -> Act : open /dashboard/my-events/approvals
+Act -> ISvc : GET /api/v1/participations/approvals/me
+ISvc -> DB : SELECT participants PENDING on my events
+Act --> H : pending roster
+H -> Act : updateParticipantStateAction(id, 'approve')
+Act -> ISvc : PATCH /participations/{id}/approve
+ISvc -> DB : UPDATE status = JOINED, approvedAt = now()
+
+@enduml
+
+
+'  ============================================================
+'  5 of 5  ·  PROXY GATING AND PROACTIVE TOKEN REFRESH
+'  ============================================================
+@startuml Planora-Seq-5-Proxy-Refresh
+!theme plain
+skinparam shadowing false
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam sequenceGroupBorderColor #33507E
+skinparam sequenceGroupBackgroundColor #EEF3FB
+skinparam participant {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+}
+skinparam note {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+}
+
+title <size:16><b>5 · Route gating and proactive token refresh</b></size>\n<size:11>proxy.ts is the only auth gate — the nested dashboard layouts run no checks</size>
+
+actor "User" as U
+participant "Browser" as B
+participant "proxy.ts\n<i>Next 16 middleware</i>" as P
+participant "authUtils\nroute tables" as AU
+participant "auth.services" as AS
+participant "Server Component\n(page)" as Page
+participant "serverHttpClient" as SHC
+participant "Express API" as API
+database "PostgreSQL" as DB
+
+U -> B : navigate to /dashboard/my-events
+B -> P : request + cookie jar
+note right of P
+  matcher skips api, _next/static,
+  _next/image, favicon, sitemap,
+  robots and .well-known
+end note
+
+P -> P : jwtUtils.verifyToken(accessToken, JWT_ACCESS_SECRET)
+note right of P : real signature verification,\nnot a bare decode
+
+group Step 1  ·  proactive refresh
+  P -> P : await isTokenExpiringSoon(accessToken)\n<i>true when 0 < remaining <= 300s</i>
+  alt expiring soon and refreshToken present
+    P -> AS : getNewTokensWithRefreshToken(refreshToken)
+    AS -> API : POST /api/v1/auth/refresh-token\nhand-built Cookie header
+    API -> DB : verify refresh JWT,\nextend session expiresAt
+    API --> AS : new token triple
+    AS --> P : true
+    P -> P : set request header x-token-refreshed = 1
+    P --> B : NextResponse.next()
+    note right of P
+      <b>Short-circuit.</b> A request that triggers a
+      refresh skips every gate below it, so the very
+      next navigation is the one that gets checked.
+    end note
+  end
+end
+
+group Step 2  ·  auth pages while already signed in
+  alt path in authRoutes and token valid
+    alt email not verified
+      P --> B : redirect /verify-email?email=
+    else
+      P --> B : redirect getDefaultDashboardRoute(role)\nADMIN|SUPER_ADMIN -> /admin/dashboard\nUSER -> /dashboard
+    end
+  end
+end
+
+group Step 3  ·  resolve who owns the route
+  P -> AU : getRouteOwner(pathname)
+  AU --> P : ADMIN | USER | COMMON | null
+  alt null  ·  public
+    P --> B : next()
+  end
+end
+
+group Step 4  ·  authentication
+  alt no valid accessToken
+    P --> B : redirect /login?redirect={pathname}
+  end
+end
+
+group Step 5  ·  email verification on protected routes
+  P -> AS : getUserInfo()
+  AS -> API : GET /api/v1/auth/me
+  API -> DB : SELECT user + relations
+  API --> AS : profile
+  note right of AS
+    Falls back to decoding the access token if this
+    call fails, so a flaky API does not lock the
+    user out of the app.
+  end note
+  AS --> P : { role, emailVerified, ... }
+  alt not verified
+    P --> B : redirect /verify-email?email=
+  end
+end
+
+group Step 6  ·  role enforcement
+  P -> P : hasAccess = routeOwner == userRole\nor (routeOwner == ADMIN and userRole == SUPER_ADMIN)
+  alt denied
+    P --> B : redirect to own default dashboard\n<i>never a 403 page</i>
+  else allowed
+    P --> B : next()
+  end
+end
+
+note over P
+  The whole body is wrapped in try/catch that returns
+  <b>next() on any thrown error</b> — it fails open, so an
+  API outage degrades to unguarded routes rather than
+  a hard lockout.
+end note
+
+B -> Page : render /dashboard/my-events
+Page -> SHC : platformServerServices.getMyEvents()
+SHC -> SHC : read cookies(), join into one Cookie header
+alt request header x-token-refreshed = 1
+  SHC -> SHC : skip refresh, proxy already did it
+end
+SHC -> API : GET /api/v1/dashboard/my-events
+API -> API : checkAuth(ADMIN, USER)
+API -> DB : SELECT with QueryBuilder\nsearch · filter · paginate · sort
+API --> SHC : { success, message, meta, data }
+SHC --> Page : ApiResponse
+Page -> Page : apiMappers normalise shape
+Page --> U : rendered dashboard
+
+@enduml

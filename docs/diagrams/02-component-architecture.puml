@@ -1,0 +1,244 @@
+@startuml Planora-Component-Architecture
+' =============================================================
+'  PLANORA - COMPONENT / DEPLOYMENT ARCHITECTURE
+'  Verified against planora-frontend/src and planora-backend/src
+' =============================================================
+!theme plain
+skinparam shadowing false
+skinparam roundcorner 10
+skinparam DefaultFontName "Segoe UI"
+skinparam DefaultFontSize 12
+skinparam ArrowColor #33507E
+skinparam ArrowThickness 1.2
+skinparam componentStyle rectangle
+
+skinparam component {
+  BackgroundColor #F7F9FC
+  BorderColor #33507E
+  FontColor #16233B
+}
+skinparam database {
+  BackgroundColor #EAF3EC
+  BorderColor #2F6B41
+  FontColor #14301D
+}
+skinparam cloud {
+  BackgroundColor #FFF8EC
+  BorderColor #B4791F
+  FontColor #4A3106
+}
+skinparam actor {
+  BackgroundColor #E7EDF9
+  BorderColor #33507E
+}
+skinparam note {
+  BackgroundColor #EEF3FB
+  BorderColor #7D96C4
+}
+
+title <size:18><b>Planora — Component & Deployment Architecture</b></size>\n<size:11>Next.js 16 (App Router, RSC) · Express 5 + Prisma 7 · PostgreSQL · both tiers on Vercel</size>
+
+' =================================================================
+'  ACTORS
+' =================================================================
+actor "Guest\nvisitor" as Guest
+actor "Registered user\n(host / participant)" as Member
+actor "Admin /\nSuper Admin" as Admin
+
+' =================================================================
+'  BROWSER TIER
+' =================================================================
+node "Browser" as Browser #FDFDFE {
+  component "Rendered UI\nReact 19 · Tailwind v4 · shadcn/radix\nnext-themes (class strategy)" as UI
+  component "httpOnly cookie jar\naccessToken · refreshToken\nbetter-auth.session_token" as Cookies
+}
+
+' =================================================================
+'  FRONTEND TIER
+' =================================================================
+node "planora-frontend  ·  Vercel  ·  Next.js 16.1.6" as FE #FBFCFE {
+
+  component "proxy.ts\n<i>Next 16 middleware</i>\n· verifies accessToken (JWT_ACCESS_SECRET)\n· proactive refresh at T-300s\n· route-owner + role gating\n· email-verification enforcement\n· fails open on error" as Proxy #E7EDF9
+
+  package "App Router" as Router {
+    component "(commonLayout)\n/ · /events · /events/[id]\n/about-us · /contact-us\n/privacy-policy\n/payment/{success,fail,cancel}" as PubRoutes
+    component "(auth)\n/login · /register\n/verify-email\n/forgot-password · /reset-password" as AuthRoutes
+    component "(dashboardLayout)/dashboard\nUSER workspace\nmy-events · invitations\njoined-events · my-reviews\nmy-payments · recommendations" as UserRoutes
+    component "(dashboardLayout)/admin/dashboard\nADMIN workspace\nusers · events · reports" as AdminRoutes
+    component "(commonProtectedLayout)\n/my-profile · /change-password" as ProtRoutes
+    component "route handler\nGET /api/auth/google/callback\nlands OAuth tokens into cookies" as OAuthLanding #E7EDF9
+  }
+
+  package "Home presentation" as HomePkg {
+    component "11 server sections\nHero · Stats · Highlights\nUpcoming · HowItWorks · Features\nCategories · Testimonials · Blogs\nFaq · Cta" as HomeSections
+    component "client motion layer\nRevealOnScroll (IntersectionObserver)\nAuroraBackground (canvas)\nCountUp · TypewriterHeadline\nall gated on prefers-reduced-motion" as MotionLayer #E7EDF9
+  }
+
+  package "Data access" as DataAccess {
+    component "server actions\n9 files · mutations only\nauth · events · reviews\ninvitations · participants\nadmin · profile" as Actions
+    component "platform.server.services\n23 read methods (RSC)" as SrvServices
+    component "platform.services\n21 read methods (browser)" as CliServices
+    component "serverHttpClient\nper-request axios\nforwards whole cookie jar\nx-token-refreshed guard" as SrvHttp
+    component "httpClient\naxios · withCredentials\nno interceptors" as CliHttp
+  }
+
+  component "apiMappers\nextractArrayPayload\nmapEvent / mapReview\nmapInvitation / mapParticipation" as Mappers
+  component "GlobalChatbot\nfloating assistant widget" as Chatbot #E7EDF9
+}
+
+' =================================================================
+'  BACKEND TIER
+' =================================================================
+node "planora-backend  ·  Vercel  ·  Express 5" as BE #FCFBF8 {
+
+  component "app.ts\nqs query parser (nested filters)\nCORS allowlist + regex\nejs views · cookieParser\nprismaSchemaReady gate" as AppTs #FFF3DC
+
+  package "Cross-cutting middleware" as MW {
+    component "checkAuth(...roles)\nsession cookie + accessToken JWT\nSUPER_ADMIN inherits ADMIN\nrejects BLOCKED / DELETED" as CheckAuth
+    component "validateRequest(zod)\nunwraps body.data for multipart" as Validate
+    component "multerUpload\nmulter-storage-cloudinary" as Multer
+    component "chatbotRateLimit\nin-memory 20 req / 60 s / IP" as RateLimit
+    component "globalErrorHandler\nZod + AppError normaliser\nrolls back orphaned uploads" as ErrHandler
+    component "notFound" as NotFound
+    component "QueryBuilder\nsearch · filter · paginate\nsort · fields · dynamicInclude" as QB
+  }
+
+  package "Feature modules  ·  /api/v1" as Modules {
+    component "auth\nregister · login · me\nrefresh-token · logout\nverify-email · resend-otp\nforget/reset-password\ngoogle login + success" as ModAuth
+    component "users\nsearch · me (GET/PATCH/DELETE)\nme/avatar" as ModUser
+    component "events\nCRUD · my-events · upcoming\nsearch-suggestions\nrecommendations" as ModEvent
+    component "participations\njoin · me · approvals/me\napprove · reject · ban" as ModPart
+    component "invitations\ninvite · me\naccept · reject" as ModInv
+    component "reviews\nlist · me · create\nupdate · delete" as ModRev
+    component "payments\ninitiate · validate\nsuccess/fail/cancel · ipn\nme · all (ADMIN)" as ModPay
+    component "dashboard\n7 read-only aggregates" as ModDash
+    component "admin\nstats · reports/summary\nusers · events\nblock · unblock · delete" as ModAdmin
+    component "chatbot\nPOST /message\n<b>unauthenticated</b>" as ModChat #FFE9E4
+  }
+
+  component "lib/auth.ts  ·  better-auth 1.5\nprismaAdapter · emailAndPassword\nrequireEmailVerification\nplugins: bearer, emailOTP(6, 120s)\nsocialProviders.google\nmounted at ALL /api/auth/*" as BetterAuth #FFF3DC
+
+  component "lib/prisma.ts\nPrismaPg driver adapter\nensureEventStatusSchema()\nraw DDL shim on import" as PrismaLib
+
+  component "utils\njwt · token · cookie\nemail (ejs + nodemailer)" as Utils
+}
+
+' =================================================================
+'  DATA STORE
+' =================================================================
+database "PostgreSQL" as PG {
+  component "9 tables\nuser · session · account · verification\nEvent · EventParticipant\nEventInvitation · EventReview\nPaymentTransaction" as Tables
+}
+
+' =================================================================
+'  EXTERNAL SERVICES
+' =================================================================
+cloud "Google OAuth 2.0\nGOOGLE_CLIENT_ID / SECRET" as Google
+cloud "Cloudinary\nCLOUDINARY_CLOUD_NAME\n_API_KEY / _API_SECRET\nevent images + avatars" as Cloudinary
+cloud "SSLCommerz\nSSL_STORE_ID / _PASSWORD\nSSL_IS_LIVE -> sandbox | securepay\ngwprocess/v4 · validator API" as SSL
+cloud "SMTP mail\nEMAIL_SENDER_SMTP_*\notp.ejs template" as SMTP
+cloud "OpenRouter\nOPENROUTER_API_KEY / _URL\ngoogle/gemini-2.0-flash-lite-001\n-> llama-3.1-8b fallback" as OpenRouter
+
+' =================================================================
+'  EDGES
+' =================================================================
+Guest  --> UI
+Member --> UI
+Admin  --> UI
+
+UI ..> Cookies : "reads / writes\nvia Set-Cookie"
+UI --> Proxy : "every navigation\n(matcher excludes api + static)"
+
+Proxy --> Router : "next() when allowed"
+Proxy ..> ModAuth : "GET /auth/me\nverification check\nPOST /auth/refresh-token"
+
+Router --> PubRoutes
+Router --> AuthRoutes
+Router --> UserRoutes
+Router --> AdminRoutes
+Router --> ProtRoutes
+
+PubRoutes --> HomeSections : "/ renders"
+HomeSections --> MotionLayer : "wraps content"
+
+PubRoutes   --> SrvServices
+UserRoutes  --> SrvServices
+AdminRoutes --> SrvServices
+ProtRoutes  --> SrvServices
+
+UI --> Actions : "form submit\n(mutations)"
+UI --> CliServices : "chatbot + AI search\nsuggestions"
+
+SrvServices  --> SrvHttp
+Actions      --> SrvHttp
+CliServices  --> CliHttp
+SrvServices  ..> Mappers : "normalise envelope"
+
+Chatbot --> CliServices
+
+SrvHttp --> AppTs : "HTTPS + forwarded cookies\nNEXT_PUBLIC_API_BASE_URL"
+CliHttp --> AppTs : "HTTPS + withCredentials"
+OAuthLanding ..> Cookies : "sets 3 httpOnly cookies"
+
+AppTs --> MW
+AppTs --> BetterAuth : "ALL /api/auth/*\nmounted before express.json()"
+MW --> Modules
+
+Modules --> QB
+Modules --> PrismaLib
+BetterAuth --> PrismaLib
+PrismaLib --> PG
+
+ModEvent --> Multer
+ModUser  --> Multer
+Multer --> Cloudinary : "stream upload\nreturns secure URL"
+ErrHandler ..> Cloudinary : "deleteFileFromCloudinary\non failed request"
+
+ModPay --> SSL : "initPayment / validate\nqueryByTransactionId"
+SSL ..> ModPay : "success · fail · cancel · IPN\nserver-to-server callback"
+
+BetterAuth --> Google : "sign-in/social"
+Google ..> ModAuth : "redirect to\n/auth/google/success"
+ModAuth ..> OAuthLanding : "302 with tokens\nin query string"
+
+BetterAuth --> Utils : "emailOTP sendVerificationOTP"
+Utils --> SMTP : "nodemailer · otp.ejs"
+
+ModChat --> OpenRouter : "chat/completions\ngrounded on event rows"
+ModChat --> RateLimit
+
+' =================================================================
+'  ANNOTATIONS
+' =================================================================
+note right of ModEvent
+  <b>"AI" recommendations are deterministic.</b>
+  GET /events/recommendations scores candidates as
+  <i>preference*3 + popularity + freshness</i> from the
+  caller's participation / invitation / review history.
+  No model call, no embeddings, no vector store.
+end note
+
+note right of ModChat
+  <b>Retrieval-augmented, not embeddings.</b>
+  Tokenises the question, runs contains/insensitive
+  matches over title, description, venue, owner.name,
+  takes 6 upcoming PUBLIC events, injects them as
+  grounded context with "never invent events" rules.
+  Falls back to a canned reply on 429 / quota errors.
+  <b>No checkAuth</b> — only the in-memory IP limiter.
+end note
+
+note bottom of Proxy
+  <b>All auth gating lives here.</b>
+  The three nested dashboard layouts are pass-throughs
+  that only set <i>dynamic = 'force-dynamic'</i>; they run
+  no auth checks of their own.
+end note
+
+note bottom of Tables
+  Soft delete (isDeleted + deletedAt) on user, Event,
+  EventParticipant, EventInvitation, EventReview.
+  PaymentTransaction has no soft-delete columns.
+end note
+
+@enduml
