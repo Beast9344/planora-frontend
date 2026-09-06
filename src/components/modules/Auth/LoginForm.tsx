@@ -234,7 +234,9 @@ const LoginForm = ({ redirectPath }: LoginFormProps) => {
           variant="outline"
           className="w-full"
           onClick={() => {
-            const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+            const baseUrl =
+              process.env.NEXT_PUBLIC_API_BASE_URL ||
+              'https://planora-backend-4bez.vercel.app/api/v1';
             const redirect = redirectPath
               ? `?redirect=${encodeURIComponent(redirectPath)}`
               : '';

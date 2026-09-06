@@ -3,11 +3,9 @@
 
 import { cookies } from 'next/headers';
 
-const BASE_API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!BASE_API_URL) {
-  throw new Error('NEXT_PUBLIC_API_BASE_URL is not defined');
-}
+const BASE_API_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://planora-backend-4bez.vercel.app/api/v1';
 
 export const logoutAction = async (): Promise<{ success: boolean }> => {
   const cookieStore = await cookies();

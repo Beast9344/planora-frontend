@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { serverHttpClient } from '@/lib/axios/serverHttpClient';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://planora-backend-4bez.vercel.app/api/v1';
 
 export type UpdateProfilePayload = {
   name?: string;
