@@ -75,11 +75,33 @@ const LoginForm = ({ redirectPath }: LoginFormProps) => {
     },
   });
 
-  const applyDemoCredentials = (role: 'user' | 'admin') => {
+  const applyDemoCredentials = async (role: 'user' | 'admin') => {
     const credentials = DEMO_CREDENTIALS[role];
     setServerError(null);
     form.setFieldValue('email', credentials.email);
     form.setFieldValue('password', credentials.password);
+
+    try {
+      const result = (await mutateAsync({
+        email: credentials.email,
+        password: credentials.password,
+      })) as any;
+
+      if (result && !result.success) {
+        setServerError(result.message || 'Login failed');
+      }
+    } catch (error: any) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'digest' in error &&
+        typeof error.digest === 'string' &&
+        error.digest.startsWith('NEXT_REDIRECT')
+      ) {
+        throw error;
+      }
+      setServerError(`Login failed: ${error?.message || 'Unknown error'}`);
+    }
   };
 
   return (
@@ -94,18 +116,20 @@ const LoginForm = ({ redirectPath }: LoginFormProps) => {
           <Button
             type="button"
             variant="outline"
+            disabled={isPending}
             className="w-full"
             onClick={() => applyDemoCredentials('user')}
           >
-            Demo User Login
+            {isPending ? 'Logging in...' : 'Demo User Login'}
           </Button>
           <Button
             type="button"
             variant="outline"
+            disabled={isPending}
             className="w-full"
             onClick={() => applyDemoCredentials('admin')}
           >
-            Demo Admin Login
+            {isPending ? 'Logging in...' : 'Demo Admin Login'}
           </Button>
         </div>
       </CardHeader>
